@@ -1,4 +1,4 @@
-# 🎭 Emo-TTS
+# 🎭 Rectifying the Emotional Flow
 
 <p align="center">
   <img src="https://img.shields.io/badge/🐍 Python-3.10+-blue" alt="python">
