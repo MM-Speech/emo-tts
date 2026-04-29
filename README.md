@@ -83,9 +83,10 @@ Emo-TTS/
 │   ├── infer/
 │   │   ├── infer_cli.py        # CLI inference
 │   │   ├── infer_gradio.py     # Gradio web UI
+│   │   ├── infer_emo_test.py   # ERNP + LIG experiment inference
 │   │   └── utils_infer.py      # Inference utilities
 │   ├── train/                  # Training & finetuning scripts
-│   ├── eval/                   # Evaluation tools (WER, SIM, UTMOS)
+│   ├── eval/                   # Evaluation tools (WER, EMOS, UTMOS)
 │   └── runtime/                # Triton + TensorRT-LLM deployment
 ├── method.png
 ├── pyproject.toml
@@ -102,8 +103,181 @@ emo-tts_infer-cli --model EmoTTS_v1_Base \
   --ref_audio "path/to/reference.wav" \
   --ref_text "Transcription of the reference audio." \
   --gen_text "Text you want to synthesize."
-
 ```
+
+```bash
+# Gradio web UI
+emo-tts_infer-gradio
+```
+
+```python
+# Python API
+from emo_tts.api import EmoTTS
+
+tts = EmoTTS(model="EmoTTS_v1_Base")
+wav, sr, spec = tts.infer(
+    ref_file="path/to/reference.wav",
+    ref_text="Transcription of the reference audio.",
+    gen_text="Text you want to synthesize.",
+    file_wave="output.wav",
+)
+```
+
+## 🧪 Experiments
+
+We evaluate on the **HIED benchmark** (400 high-arousal emotional samples) across three TTS architectures: **F5-TTS**, **CosyVoice2**, and **IndexTTS2**. The two core metrics are:
+
+- **WER** (↓) — Word Error Rate via ASR, measuring linguistic accuracy
+- **EMOS** (↑) — Emotion Score via emotion classifier, measuring emotional fidelity
+
+### 📊 Datasets
+
+All datasets used in this work are publicly available at 🤗 [erminga/emo-tts](https://huggingface.co/datasets/erminga/emo-tts).
+
+#### HIED Benchmark (ours)
+
+**HIED** (High-Intensity Emotional Dataset) is our curated evaluation benchmark specifically designed to stress-test TTS systems under high-arousal emotional conditions.
+
+| | Details |
+|---|---|
+| **Total samples** | 400 (100 per emotion) |
+| **Emotions** | Angry, Happy, Sad, Surprise |
+| **Sources** | ESD (354 samples), EmoV-DB (46 samples) |
+| **Avg duration** | 3.85 s |
+| **Total duration** | ~0.43 h |
+| **Acoustic features** | RMS energy, F0 mean/std/range, speaking rate |
+
+```python
+# Load HIED directly
+from datasets import load_dataset
+hied = load_dataset("erminga/emo-tts", "HIED", split="test")
+```
+
+<details>
+<summary><b>HIED sample fields</b></summary>
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique ID (`HIED_0000` … `HIED_0399`) |
+| `audio` | audio | Speech waveform |
+| `emotion` | string | Emotion class (`Angry` / `Happy` / `Sad` / `Surprise`) |
+| `source_dataset` | string | Origin (`ESD` / `EmoV-DB`) |
+| `speaker` | string | Speaker identifier |
+| `rms_energy` | float | RMS energy |
+| `f0_mean` | float | Mean fundamental frequency (Hz) |
+| `f0_std` | float | F0 standard deviation |
+| `f0_range` | float | F0 range (Hz) |
+| `speaking_rate` | float | Speaking rate (phonemes/s) |
+| `duration` | float | Duration (seconds) |
+
+</details>
+
+#### Source Datasets
+
+| Dataset | Emotions | Speakers | Language | Reference |
+|---------|----------|----------|----------|-----------|
+| **ESD** | Neutral, Happy, Sad, Angry, Surprise | 10 EN + 10 ZH | EN / ZH | [Zhou et al., 2022](https://github.com/HLTSingapore/Emotional-Speech-Data) |
+| **EmoV-DB** | Neutral, Amused, Angry, Sleepy, Disgusted | 4 (bea, jenie, josh, sam) | EN / FR | [OpenSLR-115](https://www.openslr.org/115/) · [Adigwe et al., 2018](https://arxiv.org/abs/1806.09514) |
+| **Expresso** | 8 read + 26 improvised styles | 4 (2M, 2F), 48kHz | EN | [ylacombe/expresso](https://huggingface.co/datasets/ylacombe/expresso) · [Nguyen et al., 2023](https://arxiv.org/abs/2308.05725) |
+
+> All three source datasets, along with the HIED benchmark, are mirrored in our HuggingFace repository for one-stop download:
+> ```bash
+> # Download everything (~10 GB)
+> huggingface-cli download erminga/emo-tts --repo-type dataset --local-dir ./emo-tts-data
+> ```
+
+### Reproduce Results
+
+**Step 1.** Download the HIED dataset:
+
+```python
+from datasets import load_dataset
+hied = load_dataset("erminga/emo-tts", "HIED", split="test")
+```
+
+**Step 2.** Run inference (Baseline vs. ERNP + LIG ablations):
+
+```bash
+# Baseline — standard CFG
+python src/emo_tts/infer/infer_emo_test.py \
+    --config configs/emo_infer.yaml \
+    --output_dir results/baseline
+
+# ERNP only — emotion-rectified noise prior
+python src/emo_tts/infer/infer_emo_test.py \
+    --config configs/emo_infer.yaml \
+    --ernp_lambda_init 50.0 --ernp_lambda_base 2.0 \
+    --output_dir results/ernp_only
+
+# LIG only — likelihood-inverse guidance
+python src/emo_tts/infer/infer_emo_test.py \
+    --config configs/emo_infer.yaml \
+    --lig_pi 0.99 --lig_lambda_max 15.0 --lig_sigma 0.5 \
+    --output_dir results/lig_only
+
+# Full method: ERNP + LIG
+python src/emo_tts/infer/infer_emo_test.py \
+    --config configs/emo_infer.yaml \
+    --ernp_lambda_init 50.0 --ernp_lambda_base 2.0 \
+    --lig_pi 0.99 --lig_lambda_max 15.0 --lig_sigma 0.5 \
+    --output_dir results/ernp_lig
+```
+
+**Step 3.** Evaluate (WER + EMOS + UTMOSv2):
+
+```bash
+pip install -e .[eval]
+
+# WER — Word Error Rate
+#   EN: Whisper (Radford et al., 2023)
+#   ZH: FunASR (Gao et al., 2023)
+python src/emo_tts/eval/eval_wer.py \
+    --gen_wav_dir results/ernp_lig \
+    --gpu_nums 8
+
+# EMOS — Emotion Score via emotion2vec (Ma et al., 2024)
+python src/emo_tts/eval/eval_emos.py \
+    --gen_wav_dir results/ernp_lig
+
+# UTMOSv2 — Speech Quality (MOS prediction)
+python src/emo_tts/eval/eval_utmos.py \
+    --audio_dir results/ernp_lig --ext wav
+```
+
+<details>
+<summary><b>Evaluation tools & checkpoints</b></summary>
+
+| Tool | Purpose | Source |
+|------|---------|--------|
+| **Whisper** | English ASR (WER) | [openai/whisper](https://github.com/openai/whisper) · [Radford et al., 2023](https://arxiv.org/abs/2212.04356) |
+| **FunASR** | Chinese ASR (WER) | [modelscope/FunASR](https://github.com/modelscope/FunASR) · [Gao et al., 2023](https://arxiv.org/abs/2305.11013) |
+| **emotion2vec** | Emotion Score (EMOS) | [ddlBoJack/emotion2vec](https://github.com/ddlBoJack/emotion2vec) · [Ma et al., 2024](https://arxiv.org/abs/2312.15185) |
+| **UTMOSv2** | Speech Quality (MOS) | [sarulab-speech/UTMOSv2](https://github.com/sarulab-speech/UTMOSv2) · [HF](https://huggingface.co/sarulab-speech/UTMOSv2) |
+
+</details>
+
+### Key Hyperparameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--ernp_lambda_init` | ERNP lookahead guidance strength | 50.0 |
+| `--ernp_lambda_base` | ERNP calibration guidance strength | 2.0 |
+| `--ernp_tau` | ERNP lookahead step size (`None` = auto) | None |
+| `--lig_pi` | LIG purity coefficient $\pi$ | 0.99 |
+| `--lig_lambda_max` | LIG max guidance clamp | 15.0 |
+| `--lig_sigma` | LIG noise scale for log-R estimation | 0.5 |
+| `--nfe_step` | Number of ODE function evaluations | 32 |
+| `--cfg_strength` | Base CFG strength | 2.0 |
+| `--seed` | Random seed for reproducibility | 0 |
+
+### Main Results on HIED
+
+| Method | WER (↓) | EMOS (↑) |
+|--------|---------|----------|
+| Baseline (standard CFG) | 4.41% | 3.63 |
+| + ERNP | 3.12% | 3.78 |
+| + LIG | 3.67% | 3.75 |
+| **+ ERNP + LIG (Ours)** | **2.53%** | **3.89** |
 
 ## 📜 License
 

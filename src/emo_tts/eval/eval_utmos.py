@@ -1,41 +1,51 @@
+"""
+UTMOSv2 Evaluation — Speech Quality (MOS prediction).
+
+Uses UTMOSv2 (Baba et al., IEEE SLT 2024) from sarulab-speech.
+Install: pip install git+https://github.com/sarulab-speech/UTMOSv2.git
+"""
+
 import argparse
 import json
 from pathlib import Path
 
-import librosa
-import torch
+import numpy as np
 from tqdm import tqdm
 
 
 def main():
-    parser = argparse.ArgumentParser(description="UTMOS Evaluation")
-    parser.add_argument("--audio_dir", type=str, required=True, help="Audio file path.")
+    parser = argparse.ArgumentParser(description="UTMOSv2 Evaluation")
+    parser.add_argument("--audio_dir", type=str, required=True, help="Directory containing audio files.")
     parser.add_argument("--ext", type=str, default="wav", help="Audio extension.")
     args = parser.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() else "xpu" if torch.xpu.is_available() else "cpu"
+    import utmosv2
 
-    predictor = torch.hub.load("tarepan/SpeechMOS:v1.2.0", "utmos22_strong", trust_repo=True)
-    predictor = predictor.to(device)
+    print("Loading UTMOSv2 model...")
+    model = utmosv2.create_model(pretrained=True)
 
-    audio_paths = list(Path(args.audio_dir).rglob(f"*.{args.ext}"))
-    utmos_score = 0
+    audio_dir = Path(args.audio_dir)
+    audio_paths = sorted(audio_dir.rglob(f"*.{args.ext}"))
+    print(f"Found {len(audio_paths)} audio files in {audio_dir}")
 
-    utmos_result_path = Path(args.audio_dir) / "_utmos_results.jsonl"
-    with open(utmos_result_path, "w", encoding="utf-8") as f:
-        for audio_path in tqdm(audio_paths, desc="Processing"):
-            wav, sr = librosa.load(audio_path, sr=None, mono=True)
-            wav_tensor = torch.from_numpy(wav).to(device).unsqueeze(0)
-            score = predictor(wav_tensor, sr)
-            line = {}
-            line["wav"], line["utmos"] = str(audio_path.stem), score.item()
-            utmos_score += score.item()
+    utmos_results = []
+    for audio_path in tqdm(audio_paths, desc="Evaluating UTMOSv2"):
+        score = model.predict(input_path=str(audio_path))
+        score_val = float(score)
+        utmos_results.append({
+            "wav": audio_path.stem,
+            "utmos": round(score_val, 4),
+        })
+
+    result_path = audio_dir / "_utmos_results.jsonl"
+    with open(result_path, "w", encoding="utf-8") as f:
+        for line in utmos_results:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
-        avg_score = utmos_score / len(audio_paths) if len(audio_paths) > 0 else 0
-        f.write(f"\nUTMOS: {avg_score:.4f}\n")
+        avg_score = np.mean([r["utmos"] for r in utmos_results]) if utmos_results else 0
+        f.write(f"\nUTMOSv2: {avg_score:.4f}\n")
 
-    print(f"UTMOS: {avg_score:.4f}")
-    print(f"UTMOS results saved to {utmos_result_path}")
+    print(f"\nUTMOSv2: {avg_score:.4f}")
+    print(f"Results saved to {result_path}")
 
 
 if __name__ == "__main__":
