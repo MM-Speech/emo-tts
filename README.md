@@ -4,9 +4,9 @@
   <img src="https://img.shields.io/badge/🐍 Python-3.10+-blue" alt="python">
   <img src="https://img.shields.io/badge/🔥 PyTorch-2.x-orange" alt="pytorch">
   <img src="https://img.shields.io/badge/Speech-Synthesis-green" alt="speech">
-  <img src="https://img.shields.io/badge/Flow-Matching-blueviolet" alt="flow">
-  <img src="https://img.shields.io/badge/Emotion-High--Arousal-red" alt="emotion">
   <img src="https://img.shields.io/badge/Venue-ACL 2026-purple" alt="venue">
+  <a href="#"><img src="https://img.shields.io/badge/📄 arXiv-paper-b31b1b" alt="arxiv"></a>
+  <a href="https://huggingface.co/datasets/erminga/emo-tts"><img src="https://img.shields.io/badge/🤗 Dataset-erminga/emo--tts-yellow" alt="dataset"></a>
 </p>
 
 ## 📝 Abstract
@@ -244,7 +244,6 @@ python src/emo_tts/eval/eval_utmos.py \
     --audio_dir results/ernp_lig --ext wav
 ```
 
-<details>
 <summary><b>Evaluation tools & checkpoints</b></summary>
 
 | Tool | Purpose | Source |
@@ -254,31 +253,8 @@ python src/emo_tts/eval/eval_utmos.py \
 | **emotion2vec** | Emotion Score (EMOS) | [ddlBoJack/emotion2vec](https://github.com/ddlBoJack/emotion2vec) · [Ma et al., 2024](https://arxiv.org/abs/2312.15185) |
 | **UTMOSv2** | Speech Quality (MOS) | [sarulab-speech/UTMOSv2](https://github.com/sarulab-speech/UTMOSv2) · [HF](https://huggingface.co/sarulab-speech/UTMOSv2) |
 
-</details>
-
-### Key Hyperparameters
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `--ernp_lambda_init` | ERNP lookahead guidance strength | 50.0 |
-| `--ernp_lambda_base` | ERNP calibration guidance strength | 2.0 |
-| `--ernp_tau` | ERNP lookahead step size (`None` = auto) | None |
-| `--lig_pi` | LIG purity coefficient $\pi$ | 0.99 |
-| `--lig_lambda_max` | LIG max guidance clamp | 15.0 |
-| `--lig_sigma` | LIG noise scale for log-R estimation | 0.5 |
-| `--nfe_step` | Number of ODE function evaluations | 32 |
-| `--cfg_strength` | Base CFG strength | 2.0 |
-| `--seed` | Random seed for reproducibility | 0 |
-
-### Main Results on HIED
-
-| Method | WER (↓) | EMOS (↑) |
-|--------|---------|----------|
-| Baseline (standard CFG) | 4.41% | 3.63 |
-| + ERNP | 3.12% | 3.78 |
-| + LIG | 3.67% | 3.75 |
-| **+ ERNP + LIG (Ours)** | **2.53%** | **3.89** |
 
 ## 📜 License
 
 Code is released under the [MIT License](LICENSE).
+
